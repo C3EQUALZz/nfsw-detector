@@ -1,0 +1,84 @@
+x-default: &default
+  restart: unless-stopped
+  env_file:
+    - .env
+  networks:
+    - overlay
+
+x-healthcheck-interval: &hc-interval
+  interval: 30s
+  timeout: 60s
+  retries: 5
+  start_period: 10s
+
+x-api-environment: &x-api-environment
+  UVICORN_HOST: ${UVICORN_HOST}
+  UVICORN_PORT: ${UVICORN_PORT}
+  API_KEY_FOR_NSFW_CONTENT: ${API_KEY_FOR_NSFW_CONTENT}
+  FASTAPI_DEBUG: ${FASTAPI_DEBUG}
+  FASTAPI_ALLOW_CREDENTIALS: ${FASTAPI_ALLOW_CREDENTIALS}
+
+x-redis-environment: &x-redis-environment
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+  REDIS_USER: ${REDIS_USER}
+  REDIS_USER_PASSWORD: ${REDIS_USER_PASSWORD}
+  REDIS_PORT: ${REDIS_PORT}
+  REDIS_DB: ${REDIS_DB}
+
+services:
+  api:
+    <<: *default
+    container_name: nsfw_detector.api
+    hostname: nsfw_detector.api
+    build:
+      context: .
+      dockerfile: ./deploy/nsfw_detector/Dockerfile
+    environment:
+      <<: [*x-api-environment, *x-redis-environment]
+      REDIS_HOST: redis
+    command: /bin/sh -cx "./api_entrypoint.sh"
+    ports:
+      - 127.0.0.1:${UVICORN_PORT}:${UVICORN_PORT}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsSL http://localhost:${UVICORN_PORT}/healthcheck/",
+        ]
+      <<: *hc-interval
+
+  redis:
+    <<: *default
+    image: redis:8.0.2-alpine
+    container_name: nsfw_detector.redis
+    hostname: nsfw_detector.redis
+    environment:
+      <<: *x-redis-environment
+    command: /bin/sh -cx "/usr/local/bin/redis_entrypoint.sh"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$REDIS_PASSWORD", "ping"]
+      <<: *hc-interval
+    ports:
+      - 127.0.0.1:${REDIS_PORT}:${REDIS_PORT}
+    volumes:
+      - nsfw_detector.redis.data:/data
+      - ./deploy/redis/redis_entrypoint.sh:/usr/local/bin/redis_entrypoint.sh
+
+volumes:
+  users.postgres.data: { }
+  nsfw_detector.redis.data: { }
+
+networks:
+  overlay:
+    driver: bridge
