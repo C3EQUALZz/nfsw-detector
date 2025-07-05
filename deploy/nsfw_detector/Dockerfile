@@ -4,7 +4,7 @@ WORKDIR /app
 COPY ./pyproject.toml ./deploy/nsfw_detector/api_entrypoint.sh ./
 COPY ./src ./src
 
-RUN uv pip install --system --no-cache --target dependencies
+RUN uv pip install --system --no-cache --target dependencies  .
 
 
 FROM python:3.12-slim AS production

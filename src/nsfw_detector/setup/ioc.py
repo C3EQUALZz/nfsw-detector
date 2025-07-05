@@ -16,11 +16,6 @@ from nsfw_detector.infrastructure.clients.http.providers import get_client
 from nsfw_detector.setup.configs import ASGIConfig, GenAPIConfig, RedisConfig
 
 
-@lru_cache(maxsize=1)
-def __get_local_nsfw_factory() -> NSFWDetector:
-    return NSFWDetector()
-
-
 def configs_provider() -> Provider:
     """Creates a Provider for application configuration dependencies.
 
@@ -43,7 +38,7 @@ def http_provider() -> Provider:
 
 def gateways_provider() -> Provider:
     provider: Final[Provider] = Provider(scope=Scope.REQUEST)
-    provider.provide(__get_local_nsfw_factory, provides=NSFWDetector)
+    provider.provide(NSFWDetector, provides=NSFWDetector, scope=Scope.APP)
     provider.provide(NSFWDetectorImageQueryGateway, provides=ImageQueryGateway)
     return provider
 
